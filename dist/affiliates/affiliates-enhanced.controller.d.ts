@@ -1,0 +1,208 @@
+import { Response } from 'express';
+import { AffiliatesEnhancedService } from './affiliates-enhanced.service';
+import { RegisterAffiliateDto, UpdateAffiliateDto, TrackClickDto, RecordConversionDto, ApproveCommissionDto, MarkCommissionPaidDto } from './dto';
+export declare class AffiliatesEnhancedController {
+    private readonly affiliatesService;
+    constructor(affiliatesService: AffiliatesEnhancedService);
+    registerAffiliate(dto: RegisterAffiliateDto, tenantId: string): Promise<{
+        name: string;
+        email: string | null;
+        tenantId: string;
+        id: string;
+        isActive: boolean;
+        createdAt: Date;
+        updatedAt: Date;
+        metadata: import("@prisma/client/runtime/library").JsonValue | null;
+        status: import(".prisma/client").$Enums.AffiliateStatus;
+        code: string;
+        commissionRate: import("@prisma/client/runtime/library").Decimal;
+        totalCommission: number;
+        totalSales: number;
+        totalClicks: number;
+        totalConversions: number;
+        approvedBy: string | null;
+        approvedAt: Date | null;
+    }>;
+    listAffiliates(req: any, status?: string): Promise<{
+        name: string;
+        email: string | null;
+        tenantId: string;
+        id: string;
+        isActive: boolean;
+        createdAt: Date;
+        updatedAt: Date;
+        metadata: import("@prisma/client/runtime/library").JsonValue | null;
+        status: import(".prisma/client").$Enums.AffiliateStatus;
+        code: string;
+        commissionRate: import("@prisma/client/runtime/library").Decimal;
+        totalCommission: number;
+        totalSales: number;
+        totalClicks: number;
+        totalConversions: number;
+        approvedBy: string | null;
+        approvedAt: Date | null;
+    }[]>;
+    getAffiliate(req: any, id: string): Promise<{
+        commissions: {
+            id: string;
+            createdAt: Date;
+            amount: number;
+            status: import(".prisma/client").$Enums.CommissionStatus;
+            affiliateId: string;
+            orderId: string | null;
+            note: string | null;
+            paidAt: Date | null;
+        }[];
+    } & {
+        name: string;
+        email: string | null;
+        tenantId: string;
+        id: string;
+        isActive: boolean;
+        createdAt: Date;
+        updatedAt: Date;
+        metadata: import("@prisma/client/runtime/library").JsonValue | null;
+        status: import(".prisma/client").$Enums.AffiliateStatus;
+        code: string;
+        commissionRate: import("@prisma/client/runtime/library").Decimal;
+        totalCommission: number;
+        totalSales: number;
+        totalClicks: number;
+        totalConversions: number;
+        approvedBy: string | null;
+        approvedAt: Date | null;
+    }>;
+    updateAffiliate(req: any, id: string, dto: UpdateAffiliateDto): Promise<{
+        name: string;
+        email: string | null;
+        tenantId: string;
+        id: string;
+        isActive: boolean;
+        createdAt: Date;
+        updatedAt: Date;
+        metadata: import("@prisma/client/runtime/library").JsonValue | null;
+        status: import(".prisma/client").$Enums.AffiliateStatus;
+        code: string;
+        commissionRate: import("@prisma/client/runtime/library").Decimal;
+        totalCommission: number;
+        totalSales: number;
+        totalClicks: number;
+        totalConversions: number;
+        approvedBy: string | null;
+        approvedAt: Date | null;
+    }>;
+    approveAffiliate(req: any, id: string): Promise<{
+        name: string;
+        email: string | null;
+        tenantId: string;
+        id: string;
+        isActive: boolean;
+        createdAt: Date;
+        updatedAt: Date;
+        metadata: import("@prisma/client/runtime/library").JsonValue | null;
+        status: import(".prisma/client").$Enums.AffiliateStatus;
+        code: string;
+        commissionRate: import("@prisma/client/runtime/library").Decimal;
+        totalCommission: number;
+        totalSales: number;
+        totalClicks: number;
+        totalConversions: number;
+        approvedBy: string | null;
+        approvedAt: Date | null;
+    }>;
+    rejectAffiliate(req: any, id: string): Promise<{
+        name: string;
+        email: string | null;
+        tenantId: string;
+        id: string;
+        isActive: boolean;
+        createdAt: Date;
+        updatedAt: Date;
+        metadata: import("@prisma/client/runtime/library").JsonValue | null;
+        status: import(".prisma/client").$Enums.AffiliateStatus;
+        code: string;
+        commissionRate: import("@prisma/client/runtime/library").Decimal;
+        totalCommission: number;
+        totalSales: number;
+        totalClicks: number;
+        totalConversions: number;
+        approvedBy: string | null;
+        approvedAt: Date | null;
+    }>;
+    trackClick(dto: TrackClickDto, tenantId: string): Promise<{
+        clickId: string;
+        affiliateId: string;
+    }>;
+    recordConversion(dto: RecordConversionDto, tenantId: string): Promise<{
+        id: string;
+        createdAt: Date;
+        amount: number;
+        status: import(".prisma/client").$Enums.CommissionStatus;
+        affiliateId: string;
+        orderId: string | null;
+        note: string | null;
+        paidAt: Date | null;
+    }>;
+    getAffiliateDashboard(req: any, id: string): Promise<{
+        affiliate: {
+            id: string;
+            name: string;
+            code: string;
+            commissionRate: import("@prisma/client/runtime/library").Decimal;
+            status: import(".prisma/client").$Enums.AffiliateStatus;
+        };
+        stats: {
+            totalClicks: number;
+            totalConversions: number;
+            totalSales: number;
+            totalCommission: number;
+            pendingCommissions: number;
+            approvedCommissions: number;
+            paidCommissions: number;
+            conversionRate: number;
+        };
+        recentCommissions: {
+            id: string;
+            createdAt: Date;
+            amount: number;
+            status: import(".prisma/client").$Enums.CommissionStatus;
+            affiliateId: string;
+            orderId: string | null;
+            note: string | null;
+            paidAt: Date | null;
+        }[];
+        recentClicks: {
+            tenantId: string;
+            id: string;
+            createdAt: Date;
+            affiliateId: string;
+            orderId: string | null;
+            ip: string | null;
+            userAgent: string | null;
+            referrer: string | null;
+            landingPage: string | null;
+            converted: boolean;
+        }[];
+    }>;
+    approveCommission(req: any, dto: ApproveCommissionDto): Promise<{
+        id: string;
+        createdAt: Date;
+        amount: number;
+        status: import(".prisma/client").$Enums.CommissionStatus;
+        affiliateId: string;
+        orderId: string | null;
+        note: string | null;
+        paidAt: Date | null;
+    }>;
+    markCommissionPaid(req: any, dto: MarkCommissionPaidDto): Promise<{
+        id: string;
+        createdAt: Date;
+        amount: number;
+        status: import(".prisma/client").$Enums.CommissionStatus;
+        affiliateId: string;
+        orderId: string | null;
+        note: string | null;
+        paidAt: Date | null;
+    }>;
+    exportPayouts(req: any, res: Response, status?: string): Promise<void>;
+}

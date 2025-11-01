@@ -1,0 +1,558 @@
+openapi: 3.0.0
+info:
+  title: CheckoutForge API
+  description: Multi-tenant SaaS checkout platform API
+  version: 1.0.0
+  contact:
+    name: CheckoutForge Support
+servers:
+  - url: http://localhost:3000/api/v1
+    description: Development server
+  - url: https://api.checkoutforge.com/api/v1
+    description: Production server
+
+tags:
+  - name: auth
+    description: Authentication endpoints
+  - name: products
+    description: Product management
+  - name: checkouts
+    description: Checkout operations
+  - name: orders
+    description: Order management
+  - name: subscriptions
+    description: Subscription management
+  - name: reports
+    description: Reporting and analytics
+  - name: gdpr
+    description: GDPR compliance
+  - name: webhooks
+    description: Webhook handlers
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    SignupRequest:
+      type: object
+      required:
+        - email
+        - password
+        - tenantId
+      properties:
+        email:
+          type: string
+          format: email
+          example: user@example.com
+        password:
+          type: string
+          minLength: 8
+          example: SecurePassword123!
+        firstName:
+          type: string
+          example: John
+        lastName:
+          type: string
+          example: Doe
+        tenantId:
+          type: string
+          example: demo-tenant
+        role:
+          type: string
+          enum: [OWNER, ADMIN, FINANCE, SUPPORT]
+          default: ADMIN
+
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+        - tenantId
+      properties:
+        email:
+          type: string
+          format: email
+          example: user@example.com
+        password:
+          type: string
+          example: SecurePassword123!
+        tenantId:
+          type: string
+          example: demo-tenant
+
+    AuthResponse:
+      type: object
+      properties:
+        user:
+          type: object
+          properties:
+            id:
+              type: string
+            email:
+              type: string
+            firstName:
+              type: string
+            lastName:
+              type: string
+            role:
+              type: string
+            tenantId:
+              type: string
+        token:
+          type: string
+
+    CreateProductRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          example: Premium Course
+        description:
+          type: string
+          example: Complete guide to mastering the topic
+        imageUrl:
+          type: string
+          example: https://example.com/image.jpg
+        metadata:
+          type: object
+
+    CreateCheckoutSessionRequest:
+      type: object
+      required:
+        - priceId
+        - customerEmail
+      properties:
+        priceId:
+          type: string
+          example: price-uuid
+        customerEmail:
+          type: string
+          format: email
+          example: customer@example.com
+        customerName:
+          type: string
+          example: John Doe
+        quantity:
+          type: integer
+          minimum: 1
+          default: 1
+        applyVat:
+          type: boolean
+          default: true
+        couponCode:
+          type: string
+          example: SAVE10
+        orderBumpIds:
+          type: array
+          items:
+            type: string
+
+    CheckoutSessionResponse:
+      type: object
+      properties:
+        clientSecret:
+          type: string
+          description: Stripe PaymentIntent client secret
+        orderId:
+          type: string
+        orderNumber:
+          type: string
+        total:
+          type: integer
+          description: Total amount in smallest currency unit
+        currency:
+          type: string
+
+    RefundOrderRequest:
+      type: object
+      properties:
+        amount:
+          type: integer
+          minimum: 1
+          description: Refund amount in smallest currency unit (leave empty for full refund)
+        reason:
+          type: string
+          example: Customer requested refund
+
+    Error:
+      type: object
+      properties:
+        statusCode:
+          type: integer
+        message:
+          type: string
+        error:
+          type: string
+
+paths:
+  /auth/signup:
+    post:
+      tags:
+        - auth
+      summary: Register a new user
+      operationId: signup
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignupRequest'
+      responses:
+        '201':
+          description: User successfully registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '409':
+          description: User already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /auth/login:
+    post:
+      tags:
+        - auth
+      summary: Login user
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /products:
+    post:
+      tags:
+        - products
+      summary: Create a new product
+      operationId: createProduct
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProductRequest'
+      responses:
+        '201':
+          description: Product created successfully
+        '401':
+          description: Unauthorized
+
+    get:
+      tags:
+        - products
+      summary: List all products
+      operationId: listProducts
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Products retrieved
+
+  /products/{id}:
+    get:
+      tags:
+        - products
+      summary: Get product by ID
+      operationId: getProduct
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Product found
+        '404':
+          description: Product not found
+
+  /checkouts/{slug}:
+    get:
+      tags:
+        - checkouts
+      summary: Get checkout page by slug
+      operationId: getCheckout
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Checkout page found
+        '404':
+          description: Checkout page not found
+
+  /checkout/{checkoutId}/session:
+    post:
+      tags:
+        - checkouts
+      summary: Create Stripe checkout session
+      operationId: createCheckoutSession
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: checkoutId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCheckoutSessionRequest'
+      responses:
+        '201':
+          description: Session created with clientSecret
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckoutSessionResponse'
+        '404':
+          description: Checkout page not found
+
+  /orders:
+    get:
+      tags:
+        - orders
+      summary: List orders
+      operationId: listOrders
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: customerId
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Orders retrieved
+
+  /orders/{id}:
+    get:
+      tags:
+        - orders
+      summary: Get order by ID
+      operationId: getOrder
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Order found
+        '404':
+          description: Order not found
+
+  /orders/{id}/refund:
+    post:
+      tags:
+        - orders
+      summary: Refund an order
+      operationId: refundOrder
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefundOrderRequest'
+      responses:
+        '201':
+          description: Refund processed
+        '404':
+          description: Order not found
+
+  /subscriptions:
+    get:
+      tags:
+        - subscriptions
+      summary: List subscriptions
+      operationId: listSubscriptions
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: customerId
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Subscriptions retrieved
+
+  /subscriptions/{id}:
+    get:
+      tags:
+        - subscriptions
+      summary: Get subscription by ID
+      operationId: getSubscription
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Subscription found
+        '404':
+          description: Subscription not found
+
+  /subscriptions/{id}/cancel:
+    post:
+      tags:
+        - subscriptions
+      summary: Cancel a subscription
+      operationId: cancelSubscription
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Subscription canceled
+        '404':
+          description: Subscription not found
+
+  /reports/vat:
+    get:
+      tags:
+        - reports
+      summary: Get VAT report for date range
+      operationId: getVatReport
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: from
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+            example: '2025-01-01'
+        - name: to
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+            example: '2025-12-31'
+      responses:
+        '200':
+          description: VAT report generated
+
+  /gdpr/export:
+    get:
+      tags:
+        - gdpr
+      summary: Export customer data (GDPR compliance)
+      operationId: exportCustomerData
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: customer_id
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Customer data exported
+        '404':
+          description: Customer not found
+
+  /gdpr/delete:
+    post:
+      tags:
+        - gdpr
+      summary: Delete/anonymize customer data (GDPR compliance)
+      operationId: deleteCustomerData
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: customer_id
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Customer data deleted/anonymized
+        '404':
+          description: Customer not found
+
+  /webhooks/stripe:
+    post:
+      tags:
+        - webhooks
+      summary: Handle Stripe webhook events
+      operationId: handleStripeWebhook
+      parameters:
+        - name: stripe-signature
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Webhook processed
+        '400':
+          description: Invalid signature

@@ -1,0 +1,562 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  OWNER
+  ADMIN
+  FINANCE
+  SUPPORT
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+  PARTIALLY_REFUNDED
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  INCOMPLETE
+  TRIALING
+  PAUSED
+}
+
+enum PriceType {
+  ONE_TIME
+  RECURRING
+}
+
+enum BillingInterval {
+  DAY
+  WEEK
+  MONTH
+  YEAR
+}
+
+enum AffiliateStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
+enum ABTestStatus {
+  DRAFT
+  RUNNING
+  PAUSED
+  COMPLETED
+}
+
+enum CommissionStatus {
+  PENDING
+  APPROVED
+  PAID
+  CANCELLED
+}
+
+model Tenant {
+  id                String   @id @default(uuid())
+  slug              String   @unique
+  name              String
+  domain            String?
+  stripeAccountId   String?  @map("stripe_account_id")
+  stripeConnectEnabled Boolean @default(false) @map("stripe_connect_enabled")
+  vatNumber         String?  @map("vat_number")
+  country           String   @default("GB")
+  currency          String   @default("GBP")
+  settings          Json?
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  users             UserAccount[]
+  products          Product[]
+  checkoutPages     CheckoutPage[]
+  orders            Order[]
+  customers         Customer[]
+  subscriptions     Subscription[]
+  affiliates        Affiliate[]
+  abTests           ABTest[]
+  pageTemplates     PageTemplate[]
+  invoices          Invoice[]
+  templates         Template[]
+
+  @@map("tenants")
+}
+
+model UserAccount {
+  id              String   @id @default(uuid())
+  email           String
+  passwordHash    String   @map("password_hash")
+  firstName       String?  @map("first_name")
+  lastName        String?  @map("last_name")
+  role            UserRole @default(ADMIN)
+  tenantId        String   @map("tenant_id")
+  isActive        Boolean  @default(true) @map("is_active")
+  lastLoginAt     DateTime? @map("last_login_at")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([email, tenantId])
+  @@map("user_accounts")
+}
+
+model Product {
+  id              String   @id @default(uuid())
+  tenantId        String   @map("tenant_id")
+  name            String
+  description     String?
+  imageUrl        String?  @map("image_url")
+  isActive        Boolean  @default(true) @map("is_active")
+  metadata        Json?
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  prices          Price[]
+  orderItems      OrderItem[]
+
+  @@map("products")
+}
+
+model Price {
+  id              String          @id @default(uuid())
+  productId       String          @map("product_id")
+  amount          Int
+  currency        String          @default("GBP")
+  type            PriceType       @default(ONE_TIME)
+  interval        BillingInterval?
+  intervalCount   Int?            @map("interval_count")
+  trialDays       Int?            @map("trial_days")
+  isActive        Boolean         @default(true) @map("is_active")
+  stripePriceId   String?         @map("stripe_price_id")
+  metadata        Json?
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+
+  product         Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  orderItems      OrderItem[]
+  subscriptions   Subscription[]
+
+  @@map("prices")
+}
+
+model CheckoutPage {
+  id                String   @id @default(uuid())
+  tenantId          String   @map("tenant_id")
+  slug              String
+  name              String
+  description       String?
+  mainPriceId       String?  @map("main_price_id")
+  collectVat        Boolean  @default(true) @map("collect_vat")
+  vatPercentage     Decimal? @default(20) @map("vat_percentage") @db.Decimal(5, 2)
+  allowCoupons      Boolean  @default(true) @map("allow_coupons")
+  successUrl        String?  @map("success_url")
+  cancelUrl         String?  @map("cancel_url")
+  customFields      Json?    @map("custom_fields")
+  settings          Json?
+  isActive          Boolean  @default(true) @map("is_active")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  tenant            Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  orders            Order[]
+  orderBumps        OrderBump[]
+  upsellOffers      UpsellOffer[]
+  abTestVariants    ABTestVariant[]
+  templateId        String?  @map("template_id")
+  template          PageTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  blocks            Json?
+
+  @@unique([tenantId, slug])
+  @@map("checkout_pages")
+}
+
+model OrderBump {
+  id                String       @id @default(uuid())
+  checkoutPageId    String       @map("checkout_page_id")
+  productId         String       @map("product_id")
+  priceId           String       @map("price_id")
+  label             String
+  description       String?
+  isActive          Boolean      @default(true) @map("is_active")
+  createdAt         DateTime     @default(now()) @map("created_at")
+  updatedAt         DateTime     @updatedAt @map("updated_at")
+
+  checkoutPage      CheckoutPage @relation(fields: [checkoutPageId], references: [id], onDelete: Cascade)
+
+  @@map("order_bumps")
+}
+
+model Customer {
+  id                String   @id @default(uuid())
+  tenantId          String   @map("tenant_id")
+  email             String
+  firstName         String?  @map("first_name")
+  lastName          String?  @map("last_name")
+  phone             String?
+  stripeCustomerId  String?  @unique @map("stripe_customer_id")
+  billingAddress    Json?    @map("billing_address")
+  shippingAddress   Json?    @map("shipping_address")
+  metadata          Json?
+  gdprConsent       Boolean  @default(false) @map("gdpr_consent")
+  gdprConsentDate   DateTime? @map("gdpr_consent_date")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  tenant            Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  orders            Order[]
+  subscriptions     Subscription[]
+
+  @@unique([email, tenantId])
+  @@map("customers")
+}
+
+model Order {
+  id                String      @id @default(uuid())
+  tenantId          String      @map("tenant_id")
+  customerId        String      @map("customer_id")
+  checkoutPageId    String?     @map("checkout_page_id")
+  orderNumber       String      @unique @map("order_number")
+  status            OrderStatus @default(PENDING)
+  subtotal          Int
+  vatAmount         Int         @default(0) @map("vat_amount")
+  discount          Int         @default(0)
+  total             Int
+  currency          String      @default("GBP")
+  stripePaymentIntentId String? @unique @map("stripe_payment_intent_id")
+  stripeChargeId    String?     @map("stripe_charge_id")
+  couponCode        String?     @map("coupon_code")
+  affiliateId       String?     @map("affiliate_id")
+  metadata          Json?
+  createdAt         DateTime    @default(now()) @map("created_at")
+  updatedAt         DateTime    @updatedAt @map("updated_at")
+
+  tenant            Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer          Customer     @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  checkoutPage      CheckoutPage? @relation(fields: [checkoutPageId], references: [id], onDelete: SetNull)
+  items             OrderItem[]
+  refunds           Refund[]
+  affiliate         Affiliate? @relation(fields: [affiliateId], references: [id], onDelete: SetNull)
+  abTestAssignment  ABTestAssignment?
+  analyticsEvents   AnalyticsEvent[]
+  invoice           Invoice?
+
+  @@map("orders")
+}
+
+model OrderItem {
+  id                String   @id @default(uuid())
+  orderId           String   @map("order_id")
+  productId         String   @map("product_id")
+  priceId           String   @map("price_id")
+  quantity          Int      @default(1)
+  unitPrice         Int      @map("unit_price")
+  total             Int
+  isOrderBump       Boolean  @default(false) @map("is_order_bump")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  order             Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product           Product  @relation(fields: [productId], references: [id])
+  price             Price    @relation(fields: [priceId], references: [id])
+
+  @@map("order_items")
+}
+
+model Refund {
+  id                String   @id @default(uuid())
+  orderId           String   @map("order_id")
+  amount            Int
+  reason            String?
+  stripeRefundId    String?  @unique @map("stripe_refund_id")
+  processedBy       String?  @map("processed_by")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  order             Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@map("refunds")
+}
+
+model Subscription {
+  id                  String             @id @default(uuid())
+  tenantId            String             @map("tenant_id")
+  customerId          String             @map("customer_id")
+  priceId             String             @map("price_id")
+  status              SubscriptionStatus @default(ACTIVE)
+  stripeSubscriptionId String?           @unique @map("stripe_subscription_id")
+  currentPeriodStart  DateTime           @map("current_period_start")
+  currentPeriodEnd    DateTime           @map("current_period_end")
+  cancelAtPeriodEnd   Boolean            @default(false) @map("cancel_at_period_end")
+  canceledAt          DateTime?          @map("canceled_at")
+  trialStart          DateTime?          @map("trial_start")
+  trialEnd            DateTime?          @map("trial_end")
+  metadata            Json?
+  createdAt           DateTime           @default(now()) @map("created_at")
+  updatedAt           DateTime           @updatedAt @map("updated_at")
+
+  tenant              Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer            Customer           @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  price               Price              @relation(fields: [priceId], references: [id])
+
+  @@map("subscriptions")
+}
+
+model UpsellOffer {
+  id                String       @id @default(uuid())
+  checkoutPageId    String       @map("checkout_page_id")
+  productId         String       @map("product_id")
+  priceId           String       @map("price_id")
+  headline          String
+  description       String?
+  displayOrder      Int          @default(0) @map("display_order")
+  isActive          Boolean      @default(true) @map("is_active")
+  createdAt         DateTime     @default(now()) @map("created_at")
+  updatedAt         DateTime     @updatedAt @map("updated_at")
+
+  checkoutPage      CheckoutPage @relation(fields: [checkoutPageId], references: [id], onDelete: Cascade)
+
+  @@map("upsell_offers")
+}
+
+model Affiliate {
+  id                String          @id @default(uuid())
+  tenantId          String          @map("tenant_id")
+  code              String
+  name              String
+  email             String?
+  status            AffiliateStatus @default(PENDING)
+  commissionRate    Decimal         @default(0) @map("commission_rate") @db.Decimal(5, 2)
+  totalCommission   Int             @default(0) @map("total_commission")
+  totalSales        Int             @default(0) @map("total_sales")
+  totalClicks       Int             @default(0) @map("total_clicks")
+  totalConversions  Int             @default(0) @map("total_conversions")
+  isActive          Boolean         @default(true) @map("is_active")
+  approvedBy        String?         @map("approved_by")
+  approvedAt        DateTime?       @map("approved_at")
+  metadata          Json?
+  createdAt         DateTime        @default(now()) @map("created_at")
+  updatedAt         DateTime        @updatedAt @map("updated_at")
+
+  tenant            Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  commissions       AffiliateCommission[]
+  clicks            AffiliateClick[]
+  orders            Order[]
+
+  @@unique([tenantId, code])
+  @@map("affiliates")
+}
+
+model AffiliateCommission {
+  id                String           @id @default(uuid())
+  affiliateId       String           @map("affiliate_id")
+  orderId           String?          @map("order_id")
+  amount            Int
+  status            CommissionStatus @default(PENDING)
+  paidAt            DateTime?        @map("paid_at")
+  note              String?
+  createdAt         DateTime         @default(now()) @map("created_at")
+
+  affiliate         Affiliate @relation(fields: [affiliateId], references: [id], onDelete: Cascade)
+
+  @@map("affiliate_commissions")
+}
+
+model AffiliateClick {
+  id                String    @id @default(uuid())
+  affiliateId       String    @map("affiliate_id")
+  tenantId          String    @map("tenant_id")
+  ip                String?
+  userAgent         String?   @map("user_agent")
+  referrer          String?
+  landingPage       String?   @map("landing_page")
+  converted         Boolean   @default(false)
+  orderId           String?   @map("order_id")
+  createdAt         DateTime  @default(now()) @map("created_at")
+
+  affiliate         Affiliate @relation(fields: [affiliateId], references: [id], onDelete: Cascade)
+
+  @@index([affiliateId, createdAt])
+  @@map("affiliate_clicks")
+}
+
+model WebhookEvent {
+  id                String   @id @default(uuid())
+  type              String
+  stripeEventId     String   @unique @map("stripe_event_id")
+  payload           Json
+  processed         Boolean  @default(false)
+  processingError   String?  @map("processing_error")
+  processedAt       DateTime? @map("processed_at")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  @@map("webhook_events")
+}
+
+model ABTest {
+  id                String       @id @default(uuid())
+  tenantId          String       @map("tenant_id")
+  name              String
+  description       String?
+  status            ABTestStatus @default(DRAFT)
+  trafficSplit      Int          @default(50) @map("traffic_split")
+  startedAt         DateTime?    @map("started_at")
+  endedAt           DateTime?    @map("ended_at")
+  winnerVariantId   String?      @map("winner_variant_id")
+  createdAt         DateTime     @default(now()) @map("created_at")
+  updatedAt         DateTime     @updatedAt @map("updated_at")
+
+  tenant            Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  variants          ABTestVariant[]
+  assignments       ABTestAssignment[]
+
+  @@map("ab_tests")
+}
+
+model ABTestVariant {
+  id                String       @id @default(uuid())
+  abTestId          String       @map("ab_test_id")
+  checkoutPageId    String       @map("checkout_page_id")
+  name              String
+  isControl         Boolean      @default(false) @map("is_control")
+  views             Int          @default(0)
+  conversions       Int          @default(0)
+  revenue           Int          @default(0)
+  createdAt         DateTime     @default(now()) @map("created_at")
+  updatedAt         DateTime     @updatedAt @map("updated_at")
+
+  abTest            ABTest       @relation(fields: [abTestId], references: [id], onDelete: Cascade)
+  checkoutPage      CheckoutPage @relation(fields: [checkoutPageId], references: [id], onDelete: Cascade)
+  assignments       ABTestAssignment[]
+
+  @@map("ab_test_variants")
+}
+
+model ABTestAssignment {
+  id                String        @id @default(uuid())
+  abTestId          String        @map("ab_test_id")
+  variantId         String        @map("variant_id")
+  orderId           String        @unique @map("order_id")
+  sessionId         String?       @map("session_id")
+  createdAt         DateTime      @default(now()) @map("created_at")
+
+  abTest            ABTest        @relation(fields: [abTestId], references: [id], onDelete: Cascade)
+  variant           ABTestVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  order             Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([abTestId, variantId])
+  @@map("ab_test_assignments")
+}
+
+model AnalyticsEvent {
+  id                String   @id @default(uuid())
+  tenantId          String   @map("tenant_id")
+  eventType         String   @map("event_type")
+  orderId           String?  @map("order_id")
+  sessionId         String?  @map("session_id")
+  pageUrl           String?  @map("page_url")
+  metadata          Json?
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  order             Order?   @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, eventType, createdAt])
+  @@index([sessionId])
+  @@map("analytics_events")
+}
+
+model PageTemplate {
+  id                String         @id @default(uuid())
+  tenantId          String         @map("tenant_id")
+  name              String
+  description       String?
+  thumbnail         String?
+  blocks            Json
+  defaultSettings   Json?          @map("default_settings")
+  isPublic          Boolean        @default(false) @map("is_public")
+  createdAt         DateTime       @default(now()) @map("created_at")
+  updatedAt         DateTime       @updatedAt @map("updated_at")
+
+  tenant            Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  checkoutPages     CheckoutPage[]
+
+  @@map("page_templates")
+}
+
+model Invoice {
+  id                String       @id @default(uuid())
+  tenantId          String       @map("tenant_id")
+  orderId           String       @unique @map("order_id")
+  invoiceNumber     String       @unique @map("invoice_number")
+  pdfUrl            String?      @map("pdf_url")
+  issuedAt          DateTime     @map("issued_at")
+  dueAt             DateTime?    @map("due_at")
+  createdAt         DateTime     @default(now()) @map("created_at")
+
+  tenant            Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  order             Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@map("invoices")
+}
+
+enum TemplateStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum TemplateCategory {
+  SALES
+  PRODUCT
+  CHECKOUT
+  WEBINAR
+  PHYSICAL
+  CUSTOM
+}
+
+model Template {
+  id              String           @id @default(uuid())
+  tenantId        String
+  name            String
+  category        TemplateCategory
+  description     String?
+  fileUrl         String
+  thumbnailUrl    String?
+  metadata        Json?
+  status          TemplateStatus   @default(DRAFT)
+  currentVersion  String           @default("0.0.1")
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  versions        TemplateVersion[]
+
+  @@index([tenantId])
+  @@index([category])
+  @@index([status])
+}
+
+model TemplateVersion {
+  id          String   @id @default(uuid())
+  templateId  String
+  version     String
+  fileUrl     String
+  metadata    Json?
+  createdBy   String
+  createdAt   DateTime @default(now())
+
+  template    Template @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@index([templateId])
+  @@unique([templateId, version])
+}
